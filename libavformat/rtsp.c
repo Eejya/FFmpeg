@@ -1478,7 +1478,7 @@ int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
             goto fail;
         } else if (reply->status_code != RTSP_STATUS_OK ||
                    reply->nb_transports != 1) {
-            err = AVERROR_INVALIDDATA;
+            err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
             goto fail;
         }
 
@@ -1737,13 +1737,14 @@ redirect:
             goto fail;
         }
     } else {
+        int ret;
         /* open the tcp connection */
         ff_url_join(tcpname, sizeof(tcpname), lower_rtsp_proto, NULL,
                     host, port,
                     "?timeout=%d", rt->stimeout);
-        if (ffurl_open(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
-                       &s->interrupt_callback, NULL) < 0) {
-            err = AVERROR(EIO);
+        if ((ret = ffurl_open(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
+                       &s->interrupt_callback, NULL)) < 0) {
+            err = ret;
             goto fail;
         }
         rt->rtsp_hd_out = rt->rtsp_hd;
@@ -1778,7 +1779,7 @@ redirect:
                        sizeof(cmd));
         ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
         if (reply->status_code != RTSP_STATUS_OK) {
-            err = AVERROR_INVALIDDATA;
+            err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
             goto fail;
         }
 
@@ -1797,6 +1798,8 @@ redirect:
         err = ff_rtsp_setup_input_streams(s, reply);
     else if (CONFIG_RTSP_MUXER)
         err = ff_rtsp_setup_output_streams(s, host);
+    else
+        av_assert0(0);
     if (err)
         goto fail;
 
