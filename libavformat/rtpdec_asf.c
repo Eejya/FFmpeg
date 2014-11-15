@@ -103,6 +103,8 @@ int ff_wms_parse_sdp_a_line(AVFormatContext *s, const char *p)
         AVDictionary *opts = NULL;
         int len = strlen(p) * 6 / 8;
         char *buf = av_mallocz(len);
+        AVInputFormat *iformat;
+
         av_base64_decode(buf, p, len);
 
         if (rtp_asf_fix_header(buf, len) < 0)
@@ -112,16 +114,19 @@ int ff_wms_parse_sdp_a_line(AVFormatContext *s, const char *p)
         if (rt->asf_ctx) {
             avformat_close_input(&rt->asf_ctx);
         }
+        if (!(iformat = av_find_input_format("asf")))
+            return AVERROR_DEMUXER_NOT_FOUND;
         if (!(rt->asf_ctx = avformat_alloc_context()))
             return AVERROR(ENOMEM);
         rt->asf_ctx->pb      = &pb;
         av_dict_set(&opts, "no_resync_search", "1", 0);
 
-        av_assert0(!rt->asf_ctx->codec_whitelist && !rt->asf_ctx->format_whitelist);
-        rt->asf_ctx-> codec_whitelist = av_strdup(s->codec_whitelist);
-        rt->asf_ctx->format_whitelist = av_strdup(s->format_whitelist);
+        if ((ret = ff_copy_whitelists(rt->asf_ctx, s)) < 0) {
+            av_dict_free(&opts);
+            return ret;
+        }
 
-        ret = avformat_open_input(&rt->asf_ctx, "", &ff_asf_demuxer, &opts);
+        ret = avformat_open_input(&rt->asf_ctx, "", iformat, &opts);
         av_dict_free(&opts);
         if (ret < 0)
             return ret;

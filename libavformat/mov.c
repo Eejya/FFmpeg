@@ -35,6 +35,7 @@
 #include "libavutil/intreadwrite.h"
 #include "libavutil/intfloat.h"
 #include "libavutil/mathematics.h"
+#include "libavutil/time_internal.h"
 #include "libavutil/avstring.h"
 #include "libavutil/dict.h"
 #include "libavutil/opt.h"
@@ -809,15 +810,15 @@ static void mov_metadata_creation_time(AVDictionary **metadata, int64_t time)
 {
     char buffer[32];
     if (time) {
-        struct tm *ptm;
+        struct tm *ptm, tmbuf;
         time_t timet;
         if(time >= 2082844800)
             time -= 2082844800;  /* seconds between 1904-01-01 and Epoch */
         timet = time;
-        ptm = gmtime(&timet);
+        ptm = gmtime_r(&timet, &tmbuf);
         if (!ptm) return;
-        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ptm);
-        av_dict_set(metadata, "creation_time", buffer, 0);
+        if (strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ptm))
+            av_dict_set(metadata, "creation_time", buffer, 0);
     }
 }
 
@@ -3818,36 +3819,42 @@ static int mov_read_mfra(MOVContext *c, AVIOContext *f)
 {
     int64_t stream_size = avio_size(f);
     int64_t original_pos = avio_tell(f);
+    int64_t seek_ret;
     int32_t mfra_size;
     int ret = -1;
-    if ((ret = avio_seek(f, stream_size - 4, SEEK_SET)) < 0) goto fail;
+    if ((seek_ret = avio_seek(f, stream_size - 4, SEEK_SET)) < 0) {
+        ret = seek_ret;
+        goto fail;
+    }
     mfra_size = avio_rb32(f);
     if (mfra_size < 0 || mfra_size > stream_size) {
         av_log(c->fc, AV_LOG_DEBUG, "doesn't look like mfra (unreasonable size)\n");
-        ret = -1;
         goto fail;
     }
-    if ((ret = avio_seek(f, -mfra_size, SEEK_CUR)) < 0) goto fail;
+    if ((seek_ret = avio_seek(f, -mfra_size, SEEK_CUR)) < 0) {
+        ret = seek_ret;
+        goto fail;
+    }
     if (avio_rb32(f) != mfra_size) {
         av_log(c->fc, AV_LOG_DEBUG, "doesn't look like mfra (size mismatch)\n");
-        ret = -1;
         goto fail;
     }
     if (avio_rb32(f) != MKBETAG('m', 'f', 'r', 'a')) {
         av_log(c->fc, AV_LOG_DEBUG, "doesn't look like mfra (tag mismatch)\n");
         goto fail;
     }
+    ret = 0;
     av_log(c->fc, AV_LOG_VERBOSE, "stream has mfra\n");
     while (!read_tfra(c, f)) {
         /* Empty */
     }
 fail:
-    ret = avio_seek(f, original_pos, SEEK_SET);
-    if (ret < 0)
+    seek_ret = avio_seek(f, original_pos, SEEK_SET);
+    if (seek_ret < 0) {
         av_log(c->fc, AV_LOG_ERROR,
                "failed to seek back after looking for mfra\n");
-    else
-        ret = 0;
+        ret = seek_ret;
+    }
     return ret;
 }
 
@@ -3923,7 +3930,7 @@ static int mov_read_header(AVFormatContext *s)
             av_reduce(&st->avg_frame_rate.num, &st->avg_frame_rate.den,
                       sc->time_scale*(int64_t)sc->nb_frames_for_fps, sc->duration_for_fps, INT_MAX);
         if (st->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
-            if (st->codec->width <= 0 && st->codec->height <= 0) {
+            if (st->codec->width <= 0 || st->codec->height <= 0) {
                 st->codec->width  = sc->width;
                 st->codec->height = sc->height;
             }

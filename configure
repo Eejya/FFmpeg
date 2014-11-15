@@ -251,6 +251,9 @@ External library support:
   --enable-libx264         enable H.264 encoding via x264 [no]
   --enable-libx265         enable HEVC encoding via x265 [no]
   --enable-libxavs         enable AVS encoding via xavs [no]
+  --enable-libxcb          enable X11 grabbing using XCB [auto]
+  --enable-libxcb-shm      enable X11 grabbing shm communication [auto]
+  --enable-libxcb-xfixes   enable X11 grabbing mouse rendering [auto]
   --enable-libxvid         enable Xvid encoding via xvidcore,
                            native MPEG-4/Xvid encoder exists [no]
   --enable-libzmq          enable message passing via libzmq [no]
@@ -262,7 +265,7 @@ External library support:
   --enable-opengl          enable OpenGL rendering [no]
   --enable-openssl         enable openssl [no]
   --disable-sdl            disable sdl [autodetect]
-  --enable-x11grab         enable X11 grabbing [no]
+  --enable-x11grab         enable X11 grabbing (legacy) [no]
   --disable-xlib           disable xlib [autodetect]
   --disable-zlib           disable zlib [autodetect]
 
@@ -1381,6 +1384,9 @@ EXTERNAL_LIBRARY_LIST="
     libx264
     libx265
     libxavs
+    libxcb
+    libxcb_shm
+    libxcb_xfixes
     libxvid
     libzmq
     libzvbi
@@ -1596,6 +1602,7 @@ ARCH_FEATURES="
 
 BUILTIN_LIST="
     atomic_cas_ptr
+    atomic_compare_exchange
     machine_rw_barrier
     MemoryBarrier
     mm_empty
@@ -1652,6 +1659,7 @@ HEADERS_LIST="
     sys_un_h
     sys_videoio_h
     termios_h
+    udplite_h
     unistd_h
     windows_h
     winsock2_h
@@ -1670,7 +1678,6 @@ MATH_FUNCS="
     exp2
     exp2f
     expf
-    fminf
     isinf
     isnan
     ldexpf
@@ -1714,6 +1721,7 @@ SYSTEM_FUNCS="
     gettimeofday
     glob
     glXGetProcAddress
+    gmtime_r
     inet_aton
     isatty
     jack_port_get_latency_range
@@ -2021,7 +2029,7 @@ simd_align_16_if_any="altivec neon sse"
 symver_if_any="symver_asm_label symver_gnu_asm"
 
 # threading support
-atomics_gcc_if="sync_val_compare_and_swap"
+atomics_gcc_if_any="sync_val_compare_and_swap atomic_compare_exchange"
 atomics_suncc_if="atomic_cas_ptr machine_rw_barrier"
 atomics_win32_if="MemoryBarrier"
 atomics_native_if_any="$ATOMICS_LIST"
@@ -2452,7 +2460,7 @@ xwma_demuxer_select="riffdec"
 # indevs / outdevs
 alsa_indev_deps="alsa_asoundlib_h snd_pcm_htimestamp"
 alsa_outdev_deps="alsa_asoundlib_h"
-avfoundation_indev_extralibs="-framework CoreVideo -framework Foundation -framework AVFoundation -framework CoreMedia"
+avfoundation_indev_extralibs="-framework CoreVideo -framework Foundation -framework AVFoundation -framework CoreMedia -framework CoreGraphics"
 avfoundation_indev_select="avfoundation"
 bktr_indev_deps_any="dev_bktr_ioctl_bt848_h machine_ioctl_bt848_h dev_video_bktr_ioctl_bt848_h dev_ic_bt8xx_h"
 caca_outdev_deps="libcaca"
@@ -2494,6 +2502,7 @@ vfwcap_indev_extralibs="-lavicap32"
 xv_outdev_deps="X11_extensions_Xvlib_h XvGetPortAttribute"
 xv_outdev_extralibs="-lXv -lX11 -lXext"
 x11grab_indev_deps="x11grab"
+x11grab_xcb_indev_deps="libxcb"
 
 # protocols
 bluray_protocol_deps="libbluray"
@@ -2533,6 +2542,7 @@ tcp_protocol_select="network"
 tls_protocol_deps_any="openssl gnutls"
 tls_protocol_select="tcp_protocol"
 udp_protocol_select="network"
+udplite_protocol_select="network"
 unix_protocol_deps="sys_un_h"
 unix_protocol_select="network"
 
@@ -3939,6 +3949,9 @@ case "$arch" in
     ;;
     x86)
         check_64bit x86_32 x86_64 'sizeof(void *) > 4'
+        # Treat x32 as x64 for now. Note it also needs spic=$shared
+        test "$subarch" = "x86_32" && check_cpp_condition stddef.h 'defined(__x86_64__)' &&
+            subarch=x86_64
         if test "$subarch" = "x86_64"; then
             spic=$shared
         fi
@@ -4516,7 +4529,7 @@ elif enabled parisc; then
 
     if enabled gcc; then
         case $($cc -dumpversion) in
-            4.[3-8].*) check_cflags -fno-optimize-sibling-calls ;;
+            4.[3-9].*) check_cflags -fno-optimize-sibling-calls ;;
         esac
     fi
 
@@ -4673,6 +4686,7 @@ if ! disabled network; then
 fi
 
 check_builtin atomic_cas_ptr atomic.h "void **ptr; void *oldval, *newval; atomic_cas_ptr(ptr, oldval, newval)"
+check_builtin atomic_compare_exchange "" "int *ptr, *oldval; int newval; __atomic_compare_exchange_n(ptr, oldval, newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)"
 check_builtin machine_rw_barrier mbarrier.h "__machine_rw_barrier()"
 check_builtin MemoryBarrier windows.h "MemoryBarrier()"
 check_builtin sarestart signal.h "SA_RESTART"
@@ -4690,6 +4704,7 @@ check_func  gethrtime
 check_func  getopt
 check_func  getrusage
 check_func  gettimeofday
+check_func  gmtime_r
 check_func  isatty
 check_func  localtime_r
 check_func  mach_absolute_time
@@ -4734,6 +4749,7 @@ check_header io.h
 check_header libcrystalhd/libcrystalhd_if.h
 check_header mach/mach_time.h
 check_header malloc.h
+check_header net/udplite.h
 check_header poll.h
 check_header sys/mman.h
 check_header sys/param.h
@@ -4799,7 +4815,6 @@ disabled crystalhd || check_lib libcrystalhd/libcrystalhd_if.h DtsCrystalHDVersi
 atan2f_args=2
 ldexpf_args=2
 powf_args=2
-fminf_args=2
 
 for func in $MATH_FUNCS; do
     eval check_mathfunc $func \${${func}_args:-1}
@@ -5013,10 +5028,32 @@ fi
 enabled xlib &&
     check_lib X11/Xlib.h XOpenDisplay -lX11 || disable xlib
 
-enabled x11grab                                           &&
-require Xext X11/extensions/XShm.h XShmCreateImage -lXext &&
-require Xfixes X11/extensions/Xfixes.h XFixesGetCursorImage -lXfixes &&
-{ enabled xlib || die "ERROR: Xlib not found"; }
+if ! disabled libxcb; then
+    check_pkg_config xcb xcb/xcb.h xcb_connect || {
+        enabled libxcb && die "ERROR: libxcb not found";
+    } && disable x11grab && enable libxcb
+
+if enabled libxcb; then
+    disabled libxcb_shm || {
+        check_pkg_config xcb-shm xcb/shm.h xcb_shm_attach || {
+            enabled libxcb_shm && die "ERROR: libxcb_shm not found";
+        } && check_header sys/shm.h && enable libxcb_shm; }
+
+    disabled libxcb_xfixes || {
+        check_pkg_config xcb-xfixes xcb/xfixes.h xcb_xfixes_get_cursor_image || {
+            enabled libxcb_xfixes && die "ERROR: libxcb_xfixes not found";
+        } && enable libxcb_xfixes; }
+
+    add_cflags $xcb_cflags $xcb_shm_cflags $xcb_xfixes_cflags
+    add_extralibs $xcb_libs $xcb_shm_libs $xcb_xfixes_libs
+fi
+fi
+
+if enabled x11grab; then
+    enabled xlib || die "ERROR: Xlib not found"
+    require Xext X11/extensions/XShm.h XShmCreateImage -lXext
+    require Xfixes X11/extensions/Xfixes.h XFixesGetCursorImage -lXfixes
+fi
 
 check_func_headers "windows.h" CreateDIBSection "$gdigrab_indev_extralibs"
 
