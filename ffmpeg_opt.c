@@ -1138,8 +1138,11 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
 
     MATCH_PER_STREAM_OPT(bitstream_filters, str, bsf, oc, st);
     while (bsf) {
+        char *arg = NULL;
         if (next = strchr(bsf, ','))
             *next++ = 0;
+        if (arg = strchr(bsf, '='))
+            *arg++ = 0;
         if (!(bsfc = av_bitstream_filter_init(bsf))) {
             av_log(NULL, AV_LOG_FATAL, "Unknown bitstream filter %s\n", bsf);
             exit_program(1);
@@ -1148,6 +1151,7 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
             bsfc_prev->next = bsfc;
         else
             ost->bitstream_filters = bsfc;
+        av_dict_set(&ost->bsf_args, bsfc->filter->name, arg, 0);
 
         bsfc_prev = bsfc;
         bsf       = next;
@@ -1631,35 +1635,36 @@ static int read_ffserver_streams(OptionsContext *o, AVFormatContext *s, const ch
         AVStream *st;
         OutputStream *ost;
         AVCodec *codec;
-        AVCodecContext *avctx;
+        const char *enc_config;
 
         codec = avcodec_find_encoder(ic->streams[i]->codec->codec_id);
         if (!codec) {
             av_log(s, AV_LOG_ERROR, "no encoder found for codec id %i\n", ic->streams[i]->codec->codec_id);
             return AVERROR(EINVAL);
         }
+        if (codec->type == AVMEDIA_TYPE_AUDIO)
+            opt_audio_codec(o, "c:a", codec->name);
+        else if (codec->type == AVMEDIA_TYPE_VIDEO)
+            opt_video_codec(o, "c:v", codec->name);
         ost   = new_output_stream(o, s, codec->type, -1);
         st    = ost->st;
-        avctx = st->codec;
-        ost->enc = codec;
 
-        // FIXME: a more elegant solution is needed
-        memcpy(st, ic->streams[i], sizeof(AVStream));
-        st->cur_dts = 0;
-        st->info = av_malloc(sizeof(*st->info));
-        memcpy(st->info, ic->streams[i]->info, sizeof(*st->info));
-        st->codec= avctx;
-        avcodec_copy_context(st->codec, ic->streams[i]->codec);
+        avcodec_get_context_defaults3(st->codec, codec);
+        enc_config = av_stream_get_recommended_encoder_configuration(ic->streams[i]);
+        if (enc_config) {
+            AVDictionary *opts = NULL;
+            av_dict_parse_string(&opts, enc_config, "=", ",", 0);
+            av_opt_set_dict2(st->codec, &opts, AV_OPT_SEARCH_CHILDREN);
+            av_dict_free(&opts);
+        }
 
         if (st->codec->codec_type == AVMEDIA_TYPE_AUDIO && !ost->stream_copy)
             choose_sample_fmt(st, codec);
         else if (st->codec->codec_type == AVMEDIA_TYPE_VIDEO && !ost->stream_copy)
             choose_pixel_fmt(st, st->codec, codec, st->codec->pix_fmt);
         avcodec_copy_context(ost->enc_ctx, st->codec);
-        if (ost->enc_ctx->priv_data) {
-            av_opt_free(ost->enc_ctx->priv_data);
-            av_freep(&ost->enc_ctx->priv_data);
-        }
+        if (enc_config)
+            av_dict_parse_string(&ost->encoder_opts, enc_config, "=", ",", 0);
     }
 
     avformat_close_input(&ic);

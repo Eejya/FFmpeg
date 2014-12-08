@@ -1710,11 +1710,11 @@ The default is 0.707q and gives a Butterworth response.
 Mix channels with specific gain levels. The filter accepts the output
 channel layout followed by a set of channels definitions.
 
-This filter is also designed to remap efficiently the channels of an audio
+This filter is also designed to efficiently remap the channels of an audio
 stream.
 
 The filter accepts parameters of the form:
-"@var{l}:@var{outdef}:@var{outdef}:..."
+"@var{l}|@var{outdef}|@var{outdef}|..."
 
 @table @option
 @item l
@@ -1745,13 +1745,13 @@ avoiding clipping noise.
 For example, if you want to down-mix from stereo to mono, but with a bigger
 factor for the left channel:
 @example
-pan=1:c0=0.9*c0+0.1*c1
+pan=1c|c0=0.9*c0+0.1*c1
 @end example
 
 A customized down-mix to stereo that works automatically for 3-, 4-, 5- and
 7-channels surround:
 @example
-pan=stereo: FL < FL + 0.5*FC + 0.6*BL + 0.6*SL : FR < FR + 0.5*FC + 0.6*BR + 0.6*SR
+pan=stereo| FL < FL + 0.5*FC + 0.6*BL + 0.6*SL | FR < FR + 0.5*FC + 0.6*BR + 0.6*SR
 @end example
 
 Note that @command{ffmpeg} integrates a default down-mix (and up-mix) system
@@ -1774,25 +1774,25 @@ remapping.
 For example, if you have a 5.1 source and want a stereo audio stream by
 dropping the extra channels:
 @example
-pan="stereo: c0=FL : c1=FR"
+pan="stereo| c0=FL | c1=FR"
 @end example
 
 Given the same source, you can also switch front left and front right channels
 and keep the input channel layout:
 @example
-pan="5.1: c0=c1 : c1=c0 : c2=c2 : c3=c3 : c4=c4 : c5=c5"
+pan="5.1| c0=c1 | c1=c0 | c2=c2 | c3=c3 | c4=c4 | c5=c5"
 @end example
 
 If the input is a stereo audio stream, you can mute the front left channel (and
 still keep the stereo channel layout) with:
 @example
-pan="stereo:c1=c1"
+pan="stereo|c1=c1"
 @end example
 
 Still with a stereo audio stream input, you can copy the right channel in both
 front left and right:
 @example
-pan="stereo: c0=FR : c1=FR"
+pan="stereo| c0=FR | c1=FR"
 @end example
 
 @section replaygain
@@ -8537,26 +8537,138 @@ Available values are:
 @item merge, 0
 Move odd frames into the upper field, even into the lower field,
 generating a double height frame at half frame rate.
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+
+Output:
+11111                           33333
+22222                           44444
+11111                           33333
+22222                           44444
+11111                           33333
+22222                           44444
+11111                           33333
+22222                           44444
+@end example
 
 @item drop_odd, 1
 Only output even frames, odd frames are dropped, generating a frame with
 unchanged height at half frame rate.
 
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+
+Output:
+                22222                           44444
+                22222                           44444
+                22222                           44444
+                22222                           44444
+@end example
+
 @item drop_even, 2
 Only output odd frames, even frames are dropped, generating a frame with
 unchanged height at half frame rate.
+
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+
+Output:
+11111                           33333
+11111                           33333
+11111                           33333
+11111                           33333
+@end example
 
 @item pad, 3
 Expand each frame to full height, but pad alternate lines with black,
 generating a frame with double height at the same input frame rate.
 
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+11111           22222           33333           44444
+
+Output:
+11111           .....           33333           .....
+.....           22222           .....           44444
+11111           .....           33333           .....
+.....           22222           .....           44444
+11111           .....           33333           .....
+.....           22222           .....           44444
+11111           .....           33333           .....
+.....           22222           .....           44444
+@end example
+
+
 @item interleave_top, 4
 Interleave the upper field from odd frames with the lower field from
 even frames, generating a frame with unchanged height at half frame rate.
 
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111<-         22222           33333<-         44444
+11111           22222<-         33333           44444<-
+11111<-         22222           33333<-         44444
+11111           22222<-         33333           44444<-
+
+Output:
+11111                           33333
+22222                           44444
+11111                           33333
+22222                           44444
+@end example
+
+
 @item interleave_bottom, 5
 Interleave the lower field from odd frames with the upper field from
 even frames, generating a frame with unchanged height at half frame rate.
+
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222<-         33333           44444<-
+11111<-         22222           33333<-         44444
+11111           22222<-         33333           44444<-
+11111<-         22222           33333<-         44444
+
+Output:
+22222                           44444
+11111                           33333
+22222                           44444
+11111                           33333
+@end example
+
 
 @item interlacex2, 6
 Double frame rate with unchanged height. Frames are inserted each
@@ -8564,6 +8676,25 @@ containing the second temporal field from the previous input frame and
 the first temporal field from the next input frame. This mode relies on
 the top_field_first flag. Useful for interlaced video displays with no
 field synchronisation.
+
+@example
+ ------> time
+Input:
+Frame 1         Frame 2         Frame 3         Frame 4
+
+11111           22222           33333           44444
+ 11111           22222           33333           44444
+11111           22222           33333           44444
+ 11111           22222           33333           44444
+
+Output:
+11111   22222   22222   33333   33333   44444   44444
+ 11111   11111   22222   22222   33333   33333   44444
+11111   22222   22222   33333   33333   44444   44444
+ 11111   11111   22222   22222   33333   33333   44444
+@end example
+
+
 @end table
 
 Numeric values are deprecated but are accepted for backward

@@ -33,6 +33,10 @@
 #include <xcb/shm.h>
 #endif
 
+#if CONFIG_LIBXCB_SHAPE
+#include <xcb/shape.h>
+#endif
+
 #include "libavformat/avformat.h"
 #include "libavformat/internal.h"
 
@@ -451,11 +455,11 @@ static int pixfmt_from_pixmap_format(AVFormatContext *s, int depth,
             switch (depth) {
             case 32:
                 if (fmt->bits_per_pixel == 32)
-                    *pix_fmt = AV_PIX_FMT_ARGB;
+                    *pix_fmt = AV_PIX_FMT_0RGB;
                 break;
             case 24:
                 if (fmt->bits_per_pixel == 32)
-                    *pix_fmt = AV_PIX_FMT_RGB32;
+                    *pix_fmt = AV_PIX_FMT_0RGB32;
                 else if (fmt->bits_per_pixel == 24)
                     *pix_fmt = AV_PIX_FMT_RGB24;
                 break;
@@ -560,7 +564,7 @@ static void setup_window(AVFormatContext *s)
     uint32_t values[] = { 1,
                           XCB_EVENT_MASK_EXPOSURE |
                           XCB_EVENT_MASK_STRUCTURE_NOTIFY };
-    xcb_rectangle_t rect = { c->x, c->y, c->width, c->height };
+    xcb_rectangle_t rect = { 0, 0, c->width, c->height };
 
     c->window = xcb_generate_id(c->conn);
 
@@ -576,7 +580,7 @@ static void setup_window(AVFormatContext *s)
                       XCB_COPY_FROM_PARENT,
                       mask, values);
 
-#if XCB_SHAPE_RECTANGLES
+#if CONFIG_LIBXCB_SHAPE
     xcb_shape_rectangles(c->conn, XCB_SHAPE_SO_SUBTRACT,
                          XCB_SHAPE_SK_BOUNDING, XCB_CLIP_ORDERING_UNSORTED,
                          c->window,
@@ -596,21 +600,19 @@ static av_cold int xcbgrab_read_header(AVFormatContext *s)
     const xcb_setup_t *setup;
     char *display_name = av_strdup(s->filename);
 
-    if (s->filename) {
-        if (!display_name)
-            return AVERROR(ENOMEM);
+    if (!display_name)
+        return AVERROR(ENOMEM);
 
-        if (!sscanf(s->filename, "%[^+]+%d,%d", display_name, &c->x, &c->y)) {
-            *display_name = 0;
-            sscanf(s->filename, "+%d,%d", &c->x, &c->y);
-        }
+    if (!sscanf(s->filename, "%[^+]+%d,%d", display_name, &c->x, &c->y)) {
+        *display_name = 0;
+        sscanf(s->filename, "+%d,%d", &c->x, &c->y);
     }
 
     c->conn = xcb_connect(display_name, &screen_num);
     av_freep(&display_name);
     if ((ret = xcb_connection_has_error(c->conn))) {
         av_log(s, AV_LOG_ERROR, "Cannot open display %s, error %d.\n",
-               s->filename ? s->filename : "default", ret);
+               (*s->filename) ? s->filename : "default", ret);
         return AVERROR(EIO);
     }
     setup = xcb_get_setup(c->conn);

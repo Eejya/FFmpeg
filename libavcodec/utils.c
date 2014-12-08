@@ -1690,6 +1690,8 @@ end:
     return ret;
 free_and_end:
     av_dict_free(&tmp);
+    if (codec->priv_class && codec->priv_data_size)
+        av_opt_free(avctx->priv_data);
     av_freep(&avctx->priv_data);
     if (avctx->internal) {
         av_frame_free(&avctx->internal->to_free);
@@ -2085,6 +2087,11 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
 
     if (av_image_check_size(avctx->width, avctx->height, 0, avctx))
         return AVERROR(EINVAL);
+
+    if (frame && frame->format == AV_PIX_FMT_NONE)
+        av_log(avctx, AV_LOG_WARNING, "AVFrame.format is not set\n");
+    if (frame && (frame->width == 0 || frame->height == 0))
+        av_log(avctx, AV_LOG_WARNING, "AVFrame.width or height is not set\n");
 
     av_assert0(avctx->codec->encode2);
 
@@ -3731,6 +3738,11 @@ int avpriv_bprint_to_extradata(AVCodecContext *avctx, struct AVBPrint *buf)
     ret = av_bprint_finalize(buf, &str);
     if (ret < 0)
         return ret;
+    if (!av_bprint_is_complete(buf)) {
+        av_free(str);
+        return AVERROR(ENOMEM);
+    }
+
     avctx->extradata = str;
     /* Note: the string is NUL terminated (so extradata can be read as a
      * string), but the ending character is not accounted in the size (in

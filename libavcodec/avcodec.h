@@ -319,6 +319,7 @@ enum AVCodecID {
     AV_CODEC_ID_HEVC       = MKBETAG('H','2','6','5'),
 #define AV_CODEC_ID_H265 AV_CODEC_ID_HEVC
     AV_CODEC_ID_VP7        = MKBETAG('V','P','7','0'),
+    AV_CODEC_ID_APNG       = MKBETAG('A','P','N','G'),
 
     /* various PCM "codecs" */
     AV_CODEC_ID_FIRST_AUDIO = 0x10000,     ///< A dummy id pointing at the start of audio codecs
@@ -3114,7 +3115,7 @@ typedef struct AVCodecContext {
     uint8_t *dump_separator;
 
     /**
-     * ',' seperated list of allowed decoders.
+     * ',' separated list of allowed decoders.
      * If NULL then all are allowed
      * - encoding: unused
      * - decoding: set by user through AVOPtions (NO direct access)
@@ -4353,6 +4354,8 @@ typedef struct AVCodecParser {
     int codec_ids[5]; /* several codec IDs are permitted */
     int priv_data_size;
     int (*parser_init)(AVCodecParserContext *s);
+    /* This callback never returns an error, a negative value means that
+     * the frame start was in a previous packet. */
     int (*parser_parse)(AVCodecParserContext *s,
                         AVCodecContext *avctx,
                         const uint8_t **poutbuf, int *poutbuf_size,

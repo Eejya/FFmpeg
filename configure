@@ -194,25 +194,27 @@ Individual component options:
 External library support:
   --enable-avisynth        enable reading of AviSynth script files [no]
   --disable-bzlib          disable bzlib [autodetect]
-  --enable-fontconfig      enable fontconfig
-  --enable-frei0r          enable frei0r video filtering
-  --enable-gnutls          enable gnutls [no]
+  --enable-fontconfig      enable fontconfig, useful for drawtext filter [no]
+  --enable-frei0r          enable frei0r video filtering [no]
+  --enable-gnutls          enable gnutls, needed for https support
+                           if openssl is not used [no]
   --disable-iconv          disable iconv [autodetect]
-  --enable-ladspa          enable LADSPA audio filtering
+  --enable-ladspa          enable LADSPA audio filtering [no]
   --enable-libaacplus      enable AAC+ encoding via libaacplus [no]
-  --enable-libass          enable libass subtitles rendering [no]
+  --enable-libass          enable libass subtitles rendering,
+                           needed for subtitles and ass filter [no]
   --enable-libbluray       enable BluRay reading using libbluray [no]
   --enable-libbs2b         enable bs2b DSP library [no]
-  --enable-libcaca         enable textual display using libcaca
+  --enable-libcaca         enable textual display using libcaca [no]
   --enable-libcelt         enable CELT decoding via libcelt [no]
-  --enable-libcdio         enable audio CD grabbing with libcdio
+  --enable-libcdio         enable audio CD grabbing with libcdio [no]
   --enable-libdc1394       enable IIDC-1394 grabbing using libdc1394
                            and libraw1394 [no]
   --enable-libfaac         enable AAC encoding via libfaac [no]
   --enable-libfdk-aac      enable AAC de/encoding via libfdk-aac [no]
   --enable-libflite        enable flite (voice synthesis) support via libflite [no]
-  --enable-libfreetype     enable libfreetype [no]
-  --enable-libfribidi      enable libfribidi [no]
+  --enable-libfreetype     enable libfreetype, needed for drawtext filter [no]
+  --enable-libfribidi      enable libfribidi, improves drawtext filter [no]
   --enable-libgme          enable Game Music Emu via libgme [no]
   --enable-libgsm          enable GSM de/encoding via libgsm [no]
   --enable-libiec61883     enable iec61883 via libiec61883 [no]
@@ -254,6 +256,7 @@ External library support:
   --enable-libxcb          enable X11 grabbing using XCB [auto]
   --enable-libxcb-shm      enable X11 grabbing shm communication [auto]
   --enable-libxcb-xfixes   enable X11 grabbing mouse rendering [auto]
+  --enable-libxcb-shape    enable X11 grabbing shape rendering [auto]
   --enable-libxvid         enable Xvid encoding via xvidcore,
                            native MPEG-4/Xvid encoder exists [no]
   --enable-libzmq          enable message passing via libzmq [no]
@@ -263,7 +266,8 @@ External library support:
   --enable-openal          enable OpenAL 1.1 capture support [no]
   --enable-opencl          enable OpenCL code
   --enable-opengl          enable OpenGL rendering [no]
-  --enable-openssl         enable openssl [no]
+  --enable-openssl         enable openssl, needed for https support
+                           if gnutls is not used [no]
   --disable-sdl            disable sdl [autodetect]
   --enable-x11grab         enable X11 grabbing (legacy) [no]
   --disable-xlib           disable xlib [autodetect]
@@ -1202,11 +1206,15 @@ require_cpp(){
     check_lib_cpp "$headers" "$classes" "$@" || die "ERROR: $name not found"
 }
 
-require_pkg_config(){
+use_pkg_config(){
     pkg="$1"
-    check_pkg_config "$@" || die "ERROR: $pkg not found"
+    check_pkg_config "$@" || return 1
     add_cflags    $(get_safe ${pkg}_cflags)
     add_extralibs $(get_safe ${pkg}_libs)
+}
+
+require_pkg_config(){
+    use_pkg_config "$@" || die "ERROR: $pkg not found using pkg-config$pkg_config_fail_message"
 }
 
 require_libfreetype(){
@@ -1386,6 +1394,7 @@ EXTERNAL_LIBRARY_LIST="
     libxavs
     libxcb
     libxcb_shm
+    libxcb_shape
     libxcb_xfixes
     libxvid
     libzmq
@@ -1730,6 +1739,7 @@ SYSTEM_FUNCS="
     lzo1x_999_compress
     mach_absolute_time
     MapViewOfFile
+    MoveFileExA
     memalign
     mkstemp
     mmap
@@ -2068,6 +2078,7 @@ amrwb_decoder_select="lsp"
 amv_decoder_select="sp5x_decoder exif"
 amv_encoder_select="aandcttables mpegvideoenc"
 ape_decoder_select="bswapdsp llauddsp"
+apng_decoder_select="zlib"
 asv1_decoder_select="blockdsp bswapdsp idctdsp"
 asv1_encoder_select="bswapdsp fdctdsp pixblockdsp"
 asv2_decoder_select="blockdsp bswapdsp idctdsp"
@@ -2380,6 +2391,7 @@ libwavpack_encoder_deps="libwavpack"
 libwebp_encoder_deps="libwebp"
 libx264_encoder_deps="libx264"
 libx264rgb_encoder_deps="libx264"
+libx264rgb_encoder_select="libx264_encoder"
 libx265_encoder_deps="libx265"
 libxavs_encoder_deps="libxavs"
 libxvid_encoder_deps="libxvid"
@@ -2397,6 +2409,7 @@ avi_muxer_select="riffenc"
 avisynth_demuxer_deps="avisynth"
 avisynth_demuxer_select="riffdec"
 caf_demuxer_select="riffdec"
+dash_muxer_select="mp4_muxer"
 dirac_demuxer_select="dirac_parser"
 dts_demuxer_select="dca_parser"
 dtshd_demuxer_select="dca_parser"
@@ -2565,19 +2578,16 @@ drawtext_filter_deps="libfreetype"
 ebur128_filter_deps="gpl"
 flite_filter_deps="libflite"
 frei0r_filter_deps="frei0r dlopen"
-frei0r_filter_extralibs='$ldl'
 frei0r_src_filter_deps="frei0r dlopen"
-frei0r_src_filter_extralibs='$ldl'
 geq_filter_deps="gpl"
 histeq_filter_deps="gpl"
 hqdn3d_filter_deps="gpl"
 interlace_filter_deps="gpl"
 kerndeint_filter_deps="gpl"
 ladspa_filter_deps="ladspa dlopen"
-ladspa_filter_extralibs='$ldl'
 mcdeint_filter_deps="avcodec gpl"
 movie_filter_deps="avcodec avformat"
-mp_filter_deps="gpl avcodec swscale inline_asm"
+mp_filter_deps="gpl avcodec swscale"
 mpdecimate_filter_deps="gpl"
 mpdecimate_filter_select="pixelutils"
 mptestsrc_filter_deps="gpl"
@@ -3064,9 +3074,13 @@ set_default arch cc cxx doxygen pkg_config ranlib strip sysinclude \
 enabled cross_compile || host_cc_default=$cc
 set_default host_cc
 
+pkg_config_fail_message=""
 if ! $pkg_config --version >/dev/null 2>&1; then
     warn "$pkg_config not found, library detection may fail."
     pkg_config=false
+elif is_in -static $cc $LDFLAGS && ! is_in --static $pkg_config $pkg_config_flags; then
+    pkg_config_fail_message="
+Note: When building a static binary, add --pkg-config-flags=\"--static\"."
 fi
 
 if test $doxygen != $doxygen_default && \
@@ -3443,29 +3457,6 @@ probe_cc(){
         # 4509: "This form of conditional instruction is deprecated"
         _flags="-nologo -ignore 4509"
         _flags_filter=armasm_flags
-    elif $_cc 2>&1 | grep -q Microsoft; then
-        _type=msvc
-        _ident=$($cc 2>&1 | head -n1)
-        _DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>&1 | awk '\''/including/ { sub(/^.*file: */, ""); gsub(/\\/, "/"); if (!match($$0, / /)) print "$@:", $$0 }'\'' > $(@:.o=.d)'
-        _DEPFLAGS='$(CPPFLAGS) $(CFLAGS) -showIncludes -Zs'
-        _cflags_speed="-O2"
-        _cflags_size="-O1"
-        if $_cc 2>&1 | grep -q Linker; then
-            _ld_o='-out:$@'
-        else
-            _ld_o='-Fe$@'
-        fi
-        _cc_o='-Fo$@'
-        _cc_e='-P -Fi$@'
-        _flags_filter=msvc_flags
-        _ld_lib='lib%.a'
-        _ld_path='-libpath:'
-        _flags='-nologo'
-        _cflags='-D_USE_MATH_DEFINES -D_CRT_SECURE_NO_WARNINGS -Dinline=__inline -FIstdlib.h -Dstrtoll=_strtoi64'
-        if [ $pfx = hostcc ]; then
-            append _cflags -Dsnprintf=_snprintf
-        fi
-        disable stripping
     elif $_cc 2>&1 | grep -q Intel; then
         _type=icl
         _ident=$($cc 2>&1 | head -n1)
@@ -3492,6 +3483,30 @@ probe_cc(){
         if [ $pfx = hostcc ]; then
             append _cflags -Dsnprintf=_snprintf
         fi
+        disable stripping
+    elif $_cc 2>&1 | grep -q Microsoft; then
+        _type=msvc
+        _ident=$($cc 2>&1 | head -n1)
+        _DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>&1 | awk '\''/including/ { sub(/^.*file: */, ""); gsub(/\\/, "/"); if (!match($$0, / /)) print "$@:", $$0 }'\'' > $(@:.o=.d)'
+        _DEPFLAGS='$(CPPFLAGS) $(CFLAGS) -showIncludes -Zs'
+        _cflags_speed="-O2"
+        _cflags_size="-O1"
+        if $_cc 2>&1 | grep -q Linker; then
+            _ld_o='-out:$@'
+        else
+            _ld_o='-Fe$@'
+        fi
+        _cc_o='-Fo$@'
+        _cc_e='-P -Fi$@'
+        _flags_filter=msvc_flags
+        _ld_lib='lib%.a'
+        _ld_path='-libpath:'
+        _flags='-nologo'
+        _cflags='-D_USE_MATH_DEFINES -D_CRT_SECURE_NO_WARNINGS -Dinline=__inline -FIstdlib.h -Dstrtoll=_strtoi64'
+        if [ $pfx = hostcc ]; then
+            append _cflags -Dsnprintf=_snprintf
+        fi
+        disable stripping
     elif $_cc --version 2>/dev/null | grep -q ^cparser; then
         _type=cparser
         _ident=$($_cc --version | head -n1)
@@ -4645,6 +4660,10 @@ elif check_func dlopen -ldl; then
     ldl=-ldl
 fi
 
+frei0r_filter_extralibs='$ldl'
+frei0r_src_filter_extralibs='$ldl'
+ladspa_filter_extralibs='$ldl'
+
 if ! disabled network; then
     check_func getaddrinfo $network_extralibs
     check_func getservbyport $network_extralibs
@@ -4731,6 +4750,7 @@ check_func_headers windows.h GetProcessAffinityMask
 check_func_headers windows.h GetProcessTimes
 check_func_headers windows.h GetSystemTimeAsFileTime
 check_func_headers windows.h MapViewOfFile
+check_func_headers windows.h MoveFileExA
 check_func_headers windows.h PeekNamedPipe
 check_func_headers windows.h SetConsoleTextAttribute
 check_func_headers windows.h Sleep
@@ -4867,9 +4887,8 @@ enabled libquvi           && require_pkg_config libquvi quvi/quvi.h quvi_init
 enabled librtmp           && require_pkg_config librtmp librtmp/rtmp.h RTMP_Socket
 enabled libschroedinger   && require_pkg_config schroedinger-1.0 schroedinger/schro.h schro_init
 enabled libshine          && require_pkg_config shine shine/layer3.h shine_encode_buffer
-enabled libsmbclient      && { { check_pkg_config smbclient libsmbclient.h smbc_init &&
-                                 require_pkg_config smbclient libsmbclient.h smbc_init; } ||
-                                 require smbclient libsmbclient.h smbc_init -lsmbclient; }
+enabled libsmbclient      && { check_pkg_config smbclient libsmbclient.h smbc_init ||
+                               require smbclient libsmbclient.h smbc_init -lsmbclient; }
 enabled libsoxr           && require libsoxr soxr.h soxr_create -lsoxr
 enabled libssh            && require_pkg_config libssh libssh/sftp.h sftp_init
 enabled libspeex          && require_pkg_config speex speex/speex.h speex_decoder_init -lspeex
@@ -4895,8 +4914,7 @@ enabled libvpx            && {
     enabled libvpx_vp9_encoder && { check_lib2 "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_vp9_cx VP9E_SET_AQ_MODE" -lvpx || disable libvpx_vp9_encoder; } }
 enabled libwavpack        && require libwavpack wavpack/wavpack.h WavpackOpenFileOutput  -lwavpack
 enabled libwebp           && require_pkg_config "libwebp >= 0.2.0" webp/encode.h WebPGetEncoderVersion
-enabled libx264           && { { check_pkg_config x264 "stdint.h x264.h" x264_encoder_encode &&
-                                 require_pkg_config x264 "stdint.h x264.h" x264_encoder_encode; } ||
+enabled libx264           && { use_pkg_config x264 "stdint.h x264.h" x264_encoder_encode ||
                                { require libx264 x264.h x264_encoder_encode -lx264 &&
                                  warn "using libx264 without pkg-config"; } } &&
                              { check_cpp_condition x264.h "X264_BUILD >= 118" ||
@@ -5044,8 +5062,13 @@ if enabled libxcb; then
             enabled libxcb_xfixes && die "ERROR: libxcb_xfixes not found";
         } && enable libxcb_xfixes; }
 
-    add_cflags $xcb_cflags $xcb_shm_cflags $xcb_xfixes_cflags
-    add_extralibs $xcb_libs $xcb_shm_libs $xcb_xfixes_libs
+    disabled libxcb_shape || {
+        check_pkg_config xcb-shape xcb/shape.h xcb_shape_get_rectangles || {
+            enabled libxcb_shape && die "ERROR: libxcb_shape not found";
+        } && enable libxcb_shape; }
+
+    add_cflags $xcb_cflags $xcb_shm_cflags $xcb_xfixes_cflags $xcb_shape_cflags
+    add_extralibs $xcb_libs $xcb_shm_libs $xcb_xfixes_libs $xcb_shape_libs
 fi
 fi
 

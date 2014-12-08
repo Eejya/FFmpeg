@@ -2,6 +2,9 @@ Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
 version <next>:
+
+
+version 2.5:
 - HEVC/H.265 RTP payload format (draft v6) packetizer
 - SUP/PGS subtitle demuxer
 - ffprobe -show_pixel_formats option
@@ -12,6 +15,13 @@ version <next>:
 - UDP-Lite support (RFC 3828)
 - xBR scaling filter
 - AVFoundation screen capturing support
+- ffserver supports codec private options
+- creating DASH compatible fragmented MP4, MPEG-DASH segmenting muxer
+- WebP muxer with animated WebP support
+- zygoaudio decoding support
+- APNG demuxer
+- postproc visualization support
+
 
 version 2.4:
 - Icecast protocol
