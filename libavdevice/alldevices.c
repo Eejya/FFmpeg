@@ -53,6 +53,7 @@ void avdevice_register_all(void)
     REGISTER_INOUTDEV(DECKLINK,         decklink);
     REGISTER_INDEV   (DSHOW,            dshow);
     REGISTER_INDEV   (DV1394,           dv1394);
+    REGISTER_INDEV   (DVD,              dvd);
     REGISTER_INOUTDEV(FBDEV,            fbdev);
     REGISTER_INDEV   (GDIGRAB,          gdigrab);
     REGISTER_INDEV   (IEC61883,         iec61883);
