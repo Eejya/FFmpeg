@@ -210,6 +210,7 @@ External library support:
   --enable-libcdio         enable audio CD grabbing with libcdio [no]
   --enable-libdc1394       enable IIDC-1394 grabbing using libdc1394
                            and libraw1394 [no]
+  --enable-libdvdnav       enable DVD reading through libdvdnav [no]
   --enable-libfaac         enable AAC encoding via libfaac [no]
   --enable-libfdk-aac      enable AAC de/encoding via libfdk-aac [no]
   --enable-libflite        enable flite (voice synthesis) support via libflite [no]
@@ -2524,6 +2525,7 @@ x11grab_xcb_indev_deps="libxcb"
 
 # protocols
 bluray_protocol_deps="libbluray"
+dvd_protocol_deps="libdvdnav"
 ffrtmpcrypt_protocol_deps="!librtmp_protocol"
 ffrtmpcrypt_protocol_deps_any="gcrypt nettle openssl"
 ffrtmpcrypt_protocol_select="tcp_protocol"
