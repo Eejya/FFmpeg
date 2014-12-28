@@ -182,6 +182,7 @@ typedef struct MOVContext {
     int ignore_editlist;
     int64_t next_root_atom; ///< offset of the next root atom
     int export_all;
+    int export_xmp;
     int *bitrates;          ///< bitrates read before streams creation
     int bitrates_count;
     int moov_retry;
@@ -189,6 +190,7 @@ typedef struct MOVContext {
     int has_looked_for_mfra;
     MOVFragmentIndex** fragment_index_data;
     unsigned fragment_index_count;
+    int atom_depth;
 } MOVContext;
 
 int ff_mp4_read_descr_len(AVIOContext *pb);

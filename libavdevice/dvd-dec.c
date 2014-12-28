@@ -101,8 +101,7 @@ static int read_header(AVFormatContext *ctx)
 	      printf("Error getting next block: %s\n", dvdnav_err_to_string(dvd->nav_data));
 	      return 3;
 	    }
-	    
-    switch (event) {
+	    switch (event) {
     case DVDNAV_BLOCK_OK:
       /* We have received a regular block of the currently playing MPEG stream.
        * A real player application would now pass this block through demuxing
@@ -203,10 +202,10 @@ static int read_header(AVFormatContext *ctx)
         tt_dump = 0;
 
       if (!dump && !tt_dump) {
-        fflush(stdin);
-      av_log(ctx , 0 ,"(a)ppend cell to output\n(s)kip cell\nappend until end of (t)itle\n(q)uit\n");
-      input='a';  	
-      switch (input) {
+		dump=1;		
+//      av_log(ctx , 0 ,"(a)ppend cell to output\n(s)kip cell\nappend until end of (t)itle\n(q)uit\n");
+//      input='a';  	
+/*      switch (input) {
         case 'a':
           dump = 1;
           av_log(ctx,0,"Input is appending cell to output\n");
@@ -219,7 +218,7 @@ static int read_header(AVFormatContext *ctx)
           finished = 1;
           av_log(ctx,0,"Quit\n");
         }
-
+*/
       }
       }
       break;
@@ -274,7 +273,7 @@ static int read_header(AVFormatContext *ctx)
       /* Playback should end here. */
       {
       	finished = 1;
-      	av_log(ctx,0,"Stopping Playback\n");
+      	av_log(ctx, 0 ,"Stopping Playback\n");
       }
       break;
     default:
@@ -282,6 +281,7 @@ static int read_header(AVFormatContext *ctx)
       finished = 1;
       break;
 }
+
 	#if DVD_READ_CACHE
     	if(dvdnav_free_cache_block(dvd->nav_data, buf) != DVDNAV_STATUS_OK)
     		{
@@ -289,9 +289,9 @@ static int read_header(AVFormatContext *ctx)
     		return 5;
     		}
 	#endif
-
+	
 }
-   
+av_log(ctx,0,"Finished !");   
     /*Setting the codec IDs and other attributes*/
 /*
     st_video = avformat_new_stream(ctx, NULL);	

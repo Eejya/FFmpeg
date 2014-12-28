@@ -126,7 +126,7 @@ static inline int get_duration(AVIStream *ast, int len)
 {
     if (ast->sample_size)
         return len;
-    else if (ast->dshow_block_align)
+    else if (ast->dshow_block_align > 1)
         return (len + ast->dshow_block_align - 1) / ast->dshow_block_align;
     else
         return 1;
@@ -659,7 +659,7 @@ static int avi_read_header(AVFormatContext *s)
             avio_rl32(pb); /* quality */
             if (ast->cum_len*ast->scale/ast->rate > 3600) {
                 av_log(s, AV_LOG_ERROR, "crazy start time, iam scared, giving up\n");
-                return AVERROR_INVALIDDATA;
+                ast->cum_len = 0;
             }
             ast->sample_size = avio_rl32(pb); /* sample ssize */
             ast->cum_len    *= FFMAX(1, ast->sample_size);
@@ -794,7 +794,7 @@ static int avi_read_header(AVFormatContext *s)
 //                    avio_skip(pb, size - 5 * 4);
                     break;
                 case AVMEDIA_TYPE_AUDIO:
-                    ret = ff_get_wav_header(pb, st->codec, size);
+                    ret = ff_get_wav_header(pb, st->codec, size, 0);
                     if (ret < 0)
                         return ret;
                     ast->dshow_block_align = st->codec->block_align;
@@ -1847,12 +1847,12 @@ static int avi_read_close(AVFormatContext *s)
                 av_freep(&ast->sub_ctx->pb);
                 avformat_close_input(&ast->sub_ctx);
             }
-            av_free(ast->sub_buffer);
+            av_freep(&ast->sub_buffer);
             av_free_packet(&ast->sub_pkt);
         }
     }
 
-    av_free(avi->dv_demux);
+    av_freep(&avi->dv_demux);
 
     return 0;
 }
@@ -1863,8 +1863,8 @@ static int avi_probe(AVProbeData *p)
 
     /* check file header */
     for (i = 0; avi_headers[i][0]; i++)
-        if (!memcmp(p->buf,     avi_headers[i],     4) &&
-            !memcmp(p->buf + 8, avi_headers[i] + 4, 4))
+        if (AV_RL32(p->buf    ) == AV_RL32(avi_headers[i]    ) &&
+            AV_RL32(p->buf + 8) == AV_RL32(avi_headers[i] + 4))
             return AVPROBE_SCORE_MAX;
 
     return 0;

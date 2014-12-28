@@ -516,7 +516,7 @@ static void ffmpeg_cleanup(int ret)
 
     if (vstats_file)
         fclose(vstats_file);
-    av_free(vstats_filename);
+    av_freep(&vstats_filename);
 
     av_freep(&input_streams);
     av_freep(&input_files);
@@ -819,6 +819,10 @@ static void do_subtitle_out(AVFormatContext *s,
 
     if (!subtitle_out) {
         subtitle_out = av_malloc(subtitle_out_max_size);
+        if (!subtitle_out) {
+            av_log(NULL, AV_LOG_FATAL, "Failed to allocate subtitle_out\n");
+            exit_program(1);
+        }
     }
 
     /* Note: DVB subtitle need one packet to draw them and one other
@@ -2266,16 +2270,34 @@ static void print_sdp(void)
 {
     char sdp[16384];
     int i;
+    int j;
+    AVIOContext *sdp_pb;
     AVFormatContext **avc = av_malloc_array(nb_output_files, sizeof(*avc));
 
     if (!avc)
         exit_program(1);
-    for (i = 0; i < nb_output_files; i++)
-        avc[i] = output_files[i]->ctx;
+    for (i = 0, j = 0; i < nb_output_files; i++) {
+        if (!strcmp(output_files[i]->ctx->oformat->name, "rtp")) {
+            avc[j] = output_files[i]->ctx;
+            j++;
+        }
+    }
 
-    av_sdp_create(avc, nb_output_files, sdp, sizeof(sdp));
-    printf("SDP:\n%s\n", sdp);
-    fflush(stdout);
+    av_sdp_create(avc, j, sdp, sizeof(sdp));
+
+    if (!sdp_filename) {
+        printf("SDP:\n%s\n", sdp);
+        fflush(stdout);
+    } else {
+        if (avio_open2(&sdp_pb, sdp_filename, AVIO_FLAG_WRITE, &int_cb, NULL) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "Failed to open sdp file '%s'\n", sdp_filename);
+        } else {
+            avio_printf(sdp_pb, "SDP:\n%s", sdp);
+            avio_close(sdp_pb);
+            av_freep(&sdp_filename);
+        }
+    }
+
     av_freep(&avc);
 }
 
@@ -2740,6 +2762,7 @@ static int transcode_init(void)
                     sar = dec_ctx->sample_aspect_ratio;
                 ost->st->sample_aspect_ratio = enc_ctx->sample_aspect_ratio = sar;
                 ost->st->avg_frame_rate = ist->st->avg_frame_rate;
+                ost->st->r_frame_rate = ist->st->r_frame_rate;
                 break;
             case AVMEDIA_TYPE_SUBTITLE:
                 enc_ctx->width  = dec_ctx->width;
@@ -3117,7 +3140,7 @@ static int transcode_init(void)
         return ret;
     }
 
-    if (want_sdp) {
+    if (sdp_filename || want_sdp) {
         print_sdp();
     }
 
