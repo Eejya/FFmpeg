@@ -501,8 +501,7 @@ while(!finished)
 		//dvdnav_mouse_select(dvd->nav_data , pci, btni->x_start, btni->y_start);	
 		//dvdnav_mouse_activate(dvd->nav_data , pci, btni->x_start, btni->y_start);
 		}
-		
-		}
+		}		
 		break;
 
      case DVDNAV_HIGHLIGHT:
